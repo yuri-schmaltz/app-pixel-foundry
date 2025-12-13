@@ -10,6 +10,8 @@ __all__ = (
     "HTTPServerContext",
 )
 
+
+import logging
 import socketserver
 import http.server
 import threading
@@ -75,7 +77,7 @@ class HTTPServerContext:
                 if not HTTPServerContext._is_port_in_use(self._port):
                     break
 
-                print("Waiting...")
+                logging.debug("Waiting...")
                 time.sleep(self._wait_delay)
 
         http_server = HTTPServerContext._TestServer(

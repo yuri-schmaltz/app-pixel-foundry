@@ -1,4 +1,10 @@
 ---------------------------------------------------
+LEGACY DOCUMENTATION - FOR REFERENCE ONLY
+This file documents the Blender 2.3x series UI API (2003).
+It is retained for historical context but does NOT reflect modern Blender API.
+---------------------------------------------------
+
+---------------------------------------------------
 Blender interface.c API toolkit notes
 (july 2003, Ton Roosendaal)
 ---------------------------------------------------

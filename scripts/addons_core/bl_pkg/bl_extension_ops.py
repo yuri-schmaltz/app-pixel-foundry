@@ -12,7 +12,10 @@ __all__ = (
     "pkg_wheel_filter",
 )
 
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 from functools import partial
 
@@ -395,8 +398,8 @@ def extension_url_find_repo_index_and_pkg_id(url):
             pkg_manifest_local,
             pkg_manifest_remote,
     ) in enumerate(zip(
-        repo_cache_store.pkg_manifest_from_local_ensure(error_fn=print, ignore_missing=True),
-        repo_cache_store.pkg_manifest_from_remote_ensure(error_fn=print, ignore_missing=True),
+        repo_cache_store.pkg_manifest_from_local_ensure(error_fn=logger.warning, ignore_missing=True),
+        repo_cache_store.pkg_manifest_from_remote_ensure(error_fn=logger.warning, ignore_missing=True),
         strict=True,
     )):
         # It's possible the remote repo could not be connected to when syncing.
@@ -465,7 +468,7 @@ def lock_result_any_failed_with_report(op, lock_result, report_type='ERROR'):
             "<unknown>",
         )
 
-        print("Error locking repository \"{:s}\": {:s}".format(repo_name, lock_result_for_repo))
+        logger.error("Error locking repository \"{:s}\": {:s}".format(repo_name, lock_result_for_repo))
         op.report(
             {report_type},
             rpt_("Repository \"{:s}\": {:s}{:s}").format(
@@ -572,7 +575,7 @@ def pkg_manifest_params_compatible_or_error_for_this_system(
         this_platform=platform_from_this_system(),
         this_python_version=sys.version_info,
         this_blender_version=bpy.app.version,
-        error_fn=print,
+        error_fn=logger.warning,
     )
 
 
@@ -659,7 +662,7 @@ def _preferences_ensure_disabled(
 
     repo_module = sys.modules.get(".".join(module_base_elem))
     if repo_module is None:
-        print("Repo module \"{:s}\" not in \"sys.modules\", unexpected!".format(".".join(module_base_elem)))
+        logger.warning("Repo module \"{:s}\" not in \"sys.modules\", unexpected!".format(".".join(module_base_elem)))
 
     for pkg_id in pkg_id_sequence:
         addon_module_elem = (*module_base_elem, pkg_id)
@@ -676,7 +679,7 @@ def _preferences_ensure_disabled(
         # which may be useful when debugging issues.
         if repo_module is not None:
             if not hasattr(repo_module, pkg_id):
-                print("Repo module \"{:s}.{:s}\" not a sub-module!".format(".".join(module_base_elem), pkg_id))
+                logger.warning("Repo module \"{:s}.{:s}\" not a sub-module!".format(".".join(module_base_elem), pkg_id))
 
         addon_utils.disable(
             addon_module_name,
@@ -770,7 +773,7 @@ def _preferences_install_post_enable_on_install(
         item_local = pkg_manifest_local.get(pkg_id)
         if item_local is None:
             # Unlikely but possible, do nothing in this case.
-            print("Package should have been installed but not found:", pkg_id)
+            logger.warning("Package should have been installed but not found: %s", pkg_id)
             return
 
         if item_local.type == "add-on":
