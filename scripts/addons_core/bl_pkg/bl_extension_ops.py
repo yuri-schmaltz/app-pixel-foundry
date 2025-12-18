@@ -1294,6 +1294,7 @@ class CommandHandle:
         "cmd_batch",
         "wm",
         "request_exit",
+        "_progress_started",
     )
 
     def __init__(self):
@@ -1301,6 +1302,7 @@ class CommandHandle:
         self.cmd_batch = None
         self.wm = None
         self.request_exit = None
+        self._progress_started = False
 
     @staticmethod
     def op_exec_from_iter(op, context, cmd_batch, is_modal):
@@ -1368,10 +1370,26 @@ class CommandHandle:
             repo_status_text.running = True
             _preferences_ui_redraw()
 
+            for ty, msg in msg_list:
+                if ty == 'PROGRESS':
+                    # msg format: (msg_str, progress_unit, progress, progress_range)
+                    try:
+                         _, _, progress, progress_range = msg
+                         if not self._progress_started:
+                             self.wm.progress_begin(0, progress_range)
+                             self._progress_started = True
+                         self.wm.progress_update(progress)
+                         break
+                    except ValueError:
+                         pass
+
         if command_result.all_complete:
             self.wm.event_timer_remove(self.modal_timer)
             op.runtime_handle_clear()
             context.workspace.status_text_set(None)
+            if self._progress_started:
+                self.wm.progress_end()
+                self._progress_started = False
             repo_status_text.running = False
 
             if self.request_exit:
@@ -3898,9 +3916,17 @@ class EXTENSIONS_OT_userpref_tags_set(Operator):
     bl_label = "Set Extension Tags"
     bl_options = {'INTERNAL'}
 
-    value: BoolProperty(
-        name="Value",
-        description="Enable or disable all tags",
+    mode: EnumProperty(
+        items=(
+            ('ALL', "All", "Enable all tags"),
+            ('NONE', "None", "Disable all tags"),
+            ('SOLO', "Solo", "Enable only this tag"),
+        ),
+        name="Mode",
+        options={'SKIP_SAVE'},
+    )
+    tag_name: StringProperty(
+        name="Tag Name",
         options={'SKIP_SAVE'},
     )
     data_path: StringProperty(
@@ -3916,7 +3942,7 @@ class EXTENSIONS_OT_userpref_tags_set(Operator):
 
         wm = context.window_manager
 
-        value = self.value
+        mode = self.mode
         tags_attr = self.data_path
 
         # Internal error, could happen if called from some unexpected place.
@@ -3924,9 +3950,20 @@ class EXTENSIONS_OT_userpref_tags_set(Operator):
             return {'CANCELLED'}
 
         tags_clear(wm, tags_attr)
-        if value is False:
+        
+        if mode == 'ALL':
+             # Default is True (refresh all).
+            tags_refresh(wm, tags_attr, default_value=True)
+        elif mode == 'NONE':
+            # Refresh but default False.
             tags_refresh(wm, tags_attr, default_value=False)
-
+        elif mode == 'SOLO':
+            # Refresh false, then enable specific.
+            tags_refresh(wm, tags_attr, default_value=False)
+            tags_collection = getattr(wm, tags_attr)
+            if (item := tags_collection.get(self.tag_name)):
+                item.show_tag = True
+            
         _preferences_ui_redraw()
         return {'FINISHED'}
 

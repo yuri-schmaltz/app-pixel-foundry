@@ -2160,29 +2160,8 @@ def extensions_panel_draw(panel, context):
             if ty == 'STATUS':
                 boxsub.label(text=msg)
             elif ty == 'PROGRESS':
-                msg_str, progress_unit, progress, progress_range = msg
-                if progress <= progress_range:
-                    boxsub.progress(
-                        factor=progress / progress_range,
-                        text="{:s}, {:s}".format(
-                            sizes_as_percentage_string(progress, progress_range),
-                            iface_(msg_str),
-                        ),
-                        translate=False,
-                    )
-                elif progress_unit == 'BYTE':
-                    boxsub.progress(
-                        factor=0.0,
-                        text="{:s}, {:s}".format(iface_(msg_str), size_as_fmt_string(progress)),
-                        translate=False,
-                    )
-                else:
-                    # We might want to support other types.
-                    boxsub.progress(
-                        factor=0.0,
-                        text="{:s}, {:d}".format(iface_(msg_str), progress),
-                        translate=False,
-                    )
+                # Progress is now handled by the status bar.
+                continue
             else:
                 boxsub.label(
                     text="{:s}: {:s}".format(iface_(ty), iface_(msg)),
@@ -2425,10 +2404,10 @@ def tags_panel_draw(layout, context, tags_attr):
     # a single tag always takes 2 clicks instead of one.
     row = split.row()
     props = row.operator("extensions.userpref_tags_set", text="All")
-    props.value = True
+    props.mode = 'ALL'
     props.data_path = tags_attr
     props = row.operator("extensions.userpref_tags_set", text="None")
-    props.value = False
+    props.mode = 'NONE'
     props.data_path = tags_attr
     del split, row
 
@@ -2443,12 +2422,17 @@ def tags_panel_draw(layout, context, tags_attr):
         for i, t in enumerate(sorted(tags_sorted)):
             if i == tags_len_half:
                 col = split.column()
-            col.prop(
+            row = col.row()
+            row.prop(
                 tags_collection_map[t],
                 "show_tag",
                 text=t,
                 text_ctxt=i18n_contexts.editor_preferences,
             )
+            props = row.operator("extensions.userpref_tags_set", text="Only")
+            props.mode = 'SOLO'
+            props.tag_name = t
+            props.data_path = tags_attr
     else:
         # Show some text else this seems like an error.
         col = layout.column()
