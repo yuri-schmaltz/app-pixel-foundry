@@ -1661,7 +1661,14 @@ class _RepoDataSouce_JSON(_RepoDataSouce_ABC):
         data_dict: dict[str, Any] = {}
         if mtime != 0:
             try:
+                time_start = time.time()
                 data_dict = json_from_filepath(self._filepath) or {}
+                time_delta = time.time() - time_start
+                if time_delta > 0.1:
+                    print("Performance Warning: JSON parse took {:.4f}s for \"{:s}\"".format(
+                        time_delta,
+                        self._filepath,
+                    ))
             except Exception as ex:
                 error_fn(ex)
             else:
