@@ -947,6 +947,24 @@ class ExtensionUI_FilterParams:
             show_available=wm.extension_show_panel_available,
         )
 
+    def __eq__(self, other):
+        if self is other:
+            return True
+        if self.__class__ is not other.__class__:
+            return False
+        return (
+            self.search_casefold == other.search_casefold and
+            self.tags_exclude == other.tags_exclude and
+            self.filter_by_type == other.filter_by_type and
+            self.repo_filter == other.repo_filter and
+            self.show_installed_enabled == other.show_installed_enabled and
+            self.show_installed_disabled == other.show_installed_disabled and
+            self.show_available == other.show_available and
+            self.active_theme_info == other.active_theme_info and
+            self.addons_enabled == other.addons_enabled and
+            self.repos_all == other.repos_all
+        )
+
     # The main function that iterates over remote data and decides what is "visible".
     def extension_ui_visible(
             self,
@@ -1105,15 +1123,34 @@ class display_errors:
         rowsub.operator("extensions.status_clear_errors", text="", icon='X', emboss=False)
 
         box_contents = box_header.box()
-        for err in display_errors.errors_curr:
-            # Group text split by newlines more closely.
-            # Without this, lines have too much vertical space.
-            if "\n" in err:
-                box_contents_align = box_contents.column(align=True)
-                for err in err.split("\n"):
-                    box_contents_align.label(text=err)
-            else:
-                box_contents.label(text=err)
+    for err in display_errors.errors_curr:
+        # Group text split by newlines more closely.
+        # Without this, lines have too much vertical space.
+        
+        # Check for actionable errors.
+        action_op = None
+        action_text = ""
+        action_icon = 'NONE'
+        
+        if "remote data unavailable" in err:
+            if "allow \"Online Access\"" in err:
+                action_op = "extensions.userpref_allow_online"
+                action_text = "Allow Online Access"
+                action_icon = 'CHECKMARK'
+            elif "sync with the remote" in err:
+                action_op = "extensions.repo_sync_all"
+                action_text = "Sync All"
+                action_icon = 'FILE_REFRESH'
+
+        col = box_contents.column(align=True)
+        if "\n" in err:
+            for line in err.split("\n"):
+                col.label(text=line)
+        else:
+            col.label(text=err)
+            
+        if action_op:
+            col.operator(action_op, text=action_text, icon=action_icon)
 
 
 class notify_info:
@@ -1483,6 +1520,32 @@ def extension_draw_item(
                 row.operator("wm.path_open", text="", icon='FILE_FOLDER').filepath = dirpath
 
 
+
+class ExtensionUIDrawCache:
+    """
+    Cache for extensions_panel_draw_impl to avoid iterating over all extensions
+    when the filter parameters and repository data haven't changed.
+    """
+    last_params = None
+    # key: (repo_index, id(pkg_manifest_local), id(pkg_manifest_remote))
+    # value: list[ExtensionUI]
+    cache = {}
+
+    @classmethod
+    def get(cls, params, repo_index, local, remote):
+        if params != cls.last_params:
+            cls.cache.clear()
+            cls.last_params = params
+        
+        key = (repo_index, id(local), id(remote))
+        return cls.cache.get(key)
+    
+    @classmethod
+    def set(cls, repo_index, local, remote, items):
+        key = (repo_index, id(local), id(remote))
+        cls.cache[key] = items
+
+
 def extensions_panel_draw_impl(
         self,
         context,  # `bpy.types.Context`
@@ -1697,11 +1760,29 @@ def extensions_panel_draw_impl(
                     )
                 continue
 
-        for ext_ui in params.extension_ui_visible(
+        # --- CACHING LOGIC START ---
+        ext_ui_visible_iter = ExtensionUIDrawCache.get(params, repo_index, pkg_manifest_local, pkg_manifest_remote)
+        
+        if ext_ui_visible_iter is None:
+            ext_ui_visible_iter = list(params.extension_ui_visible(
                 repo_index,
                 pkg_manifest_local,
                 pkg_manifest_remote,
-        ):
+            ))
+            ExtensionUIDrawCache.set(repo_index, pkg_manifest_local, pkg_manifest_remote, ext_ui_visible_iter)
+        else:
+            # Restore state side-effects from cached items.
+            for ext_ui in ext_ui_visible_iter:
+                if ext_ui.item_local is not None:
+                    if ext_ui.is_enabled:
+                        params.has_installed_enabled = True
+                    else:
+                        params.has_installed_disabled = True
+                else:
+                    params.has_available = True
+        # --- CACHING LOGIC END ---
+
+        for ext_ui in ext_ui_visible_iter:
             if ext_ui.item_local is None:
                 section = section_available
             else:
